@@ -1,6 +1,5 @@
 const express = require('express');
 const program = require('commander');
-const lightstep = require('lightstep-tracer');
 const opentracing = require('opentracing');
 const sqlite3 = require('sqlite3');
 const uuid = require('uuid/v1');
@@ -9,6 +8,7 @@ const path = require('path');
 const winston = require('winston');
 
 const common = require('./common');
+const loadTracer = require('./load-tracer');
 const tracingMiddleware = require('./opentracing-express');
 
 const thumbnailWidth = 320;
@@ -29,17 +29,10 @@ if (typeof program.data_root === 'undefined') {
   process.exit(1);
 }
 
-if (typeof program.access_token === 'undefined') {
-  winston.error('no access_token given!');
-  process.exit(1);
-}
-
 const databasePath = path.join(program.data_root, common.databaseName);
 const imageRoot = path.join(program.data_root, '/images/');
-const accessToken = program.access_token;
 
-const tracer = new lightstep.Tracer(
-    { access_token: accessToken, component_name: 'zoo' });
+const tracer = loadTracer.makeLightstepTracer(program);
 opentracing.initGlobalTracer(tracer);
 
 const db = new sqlite3.Database(databasePath);
