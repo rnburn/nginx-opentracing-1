@@ -151,7 +151,7 @@ RequestTracing::RequestTracing(
            to_system_timestamp(request->start_sec, request->start_msec)}});
   if (!request_span_) throw std::runtime_error{"tracer->StartSpan failed"};
   
-  // Add Instana-specific server-timing response header, but only if this isn't a subrequest
+  // Add Instana-specific server-timing response header
   add_server_timing(request, *request_span_, span_context_querier_);
 
   if (loc_conf_->enable_locations) {
