@@ -80,6 +80,46 @@ static void add_upstream_name(const ngx_http_request_t *request,
   span.SetTag("upstream.name", host_str);
 }
 
+//--------------------------------------------------------------------------------------------------
+// add_server_timing
+//--------------------------------------------------------------------------------------------------
+static void add_server_timing(ngx_http_request_t *request,
+                              const opentracing::Span &span,
+                              SpanContextQuerier& span_context_querier) {
+  if (request != request->main) {
+    // ignore subrequests
+    return;
+  }
+  auto trace_id =
+      span_context_querier.lookup_value(request, span, "x_instana_t");
+  if (trace_id.len == 0) {
+    // if we loaded a non-instana tracer, do nothing
+    return;
+  }
+  static const opentracing::string_view header_key = "server-timing";
+  static const opentracing::string_view value_prefix = "intid;desc=";
+  auto header_value_len = value_prefix.size() + trace_id.len;
+  auto header_value =
+      static_cast<char *>(ngx_palloc(request->pool, header_value_len));
+  if (header_value == nullptr) {
+    return;
+  }
+  auto header = static_cast<ngx_table_elt_t *>(
+      ngx_list_push(&request->headers_out.headers));
+  if (header == nullptr) {
+    return;
+  }
+  header->key.data =
+      reinterpret_cast<u_char *>(const_cast<char *>(header_key.data()));
+  header->key.len = header_key.size();
+  header->hash = 1;
+  auto iter = std::copy(value_prefix.begin(), value_prefix.end(), header_value);
+  std::copy_n(reinterpret_cast<char *>(trace_id.data), trace_id.len,
+              iter);
+  header->value.data = reinterpret_cast<u_char *>(header_value);
+  header->value.len = header_value_len;
+}
+
 //------------------------------------------------------------------------------
 // RequestTracing
 //------------------------------------------------------------------------------
@@ -110,6 +150,9 @@ RequestTracing::RequestTracing(
        opentracing::StartTimestamp{
            to_system_timestamp(request->start_sec, request->start_msec)}});
   if (!request_span_) throw std::runtime_error{"tracer->StartSpan failed"};
+  
+  // Add Instana-specific server-timing response header
+  add_server_timing(request, *request_span_, span_context_querier_);
 
   if (loc_conf_->enable_locations) {
     ngx_log_debug3(
