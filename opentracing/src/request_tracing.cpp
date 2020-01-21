@@ -112,7 +112,8 @@ static void add_server_timing(ngx_http_request_t *request,
   header->key.data =
       reinterpret_cast<u_char *>(const_cast<char *>(header_key.data()));
   header->key.len = header_key.size();
-  auto iter = std::copy(header_key.begin(), header_key.end(), header_value);
+  header->hash = 1;
+  auto iter = std::copy(value_prefix.begin(), value_prefix.end(), header_value);
   std::copy_n(reinterpret_cast<char *>(trace_id.data), trace_id.len,
               iter);
   header->value.data = reinterpret_cast<u_char *>(header_value);
